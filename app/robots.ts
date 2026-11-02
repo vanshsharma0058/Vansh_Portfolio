@@ -1,0 +1,12 @@
+import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
+
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
+  return {
+    rules: { userAgent: "*", allow: "/" },
+    ...(host ? { sitemap: `${protocol}://${host}/sitemap.xml` } : {}),
+  };
+}

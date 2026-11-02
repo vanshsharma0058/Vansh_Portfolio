@@ -1,0 +1,76 @@
+
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# Next.js
+/.next/
+/out/
+
+# Production build
+/build
+/dist
+
+# Environment variables (IMPORTANT)
+/.env
+/.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+/coverage
+
+# Deployment
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# Cache and temporary files
+.turbo/
+.cache/
+chrome-temp/
+reference-materials/
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# AI / development iteration artifacts
+.iteration*
+
+# Temporary test files
+*.test-output
+*.tmp
+*.temp
+
+# Debug files
+*.log
+debug.log
+
+# Local environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# Ignore image files
+*.png
+*.jpg
+*.jpeg
+*.webp
+

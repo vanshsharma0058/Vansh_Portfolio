@@ -1,0 +1,32 @@
+# Vansh Sharma
+
+Vansh Sharma is an early-career software engineer and full stack developer interested in useful web products, AI-powered applications, responsive interfaces, and interactive digital experiences.
+
+## About
+
+Vansh completed a B.Tech in Computer Science and Engineering at S.D. College of Engineering & Technology (2022–2026, 8.2/10 CGPA). His documented experience includes a Full Stack Developer internship at Softiwa Technologies and a Web Development internship at Innovexis.
+
+## Technical areas
+
+- Frontend: JavaScript, TypeScript, React, Redux Toolkit, HTML, CSS, Tailwind CSS
+- Backend: Node.js, Express, REST APIs, JWT authentication, role-based access
+- Data: MongoDB, Mongoose, PostgreSQL, MySQL, SQL
+- AI and machine learning: LLM API integration, prompt engineering, Python, Flask, scikit-learn
+- Creative development: Three.js, React Three Fiber, GSAP, ScrollTrigger, GLSL
+
+## Selected projects
+
+- Prompt2Site: AI website builder with a React frontend, Node.js/Express backend, MongoDB, LLM API integration, credits, and Razorpay payment workflows. [Live project](https://prompt2site-1-cvux.onrender.com/) · [GitHub](https://github.com/vanshsharma0058/Prompt2Site)
+- DogStudio: interactive 3D web experience using React Three Fiber, Three.js, GSAP, ScrollTrigger, and shader effects. [Live project](https://dogstudio-3d-experience.vercel.app/) · [GitHub](https://github.com/vanshsharma0058/dogstudio-3d-experience)
+- Digital Signature App: document-signing workflow with server-side PDF processing. [GitHub](https://github.com/vanshsharma0058/Digital-Signature-App)
+- Employee Salary Predictor: a Python and Flask application using a linear regression workflow. [GitHub](https://github.com/vanshsharma0058/Employee-salary-predictor)
+
+## Professional links
+
+- Email: [vanshsharmagi288@gmail.com](mailto:vanshsharmagi288@gmail.com)
+- LinkedIn: https://www.linkedin.com/in/vansh58sharma/
+- GitHub: https://github.com/vanshsharma0058
+
+## Notes
+
+The Softiwa ERP technology stack is omitted because the source materials contain conflicting descriptions. Prompt2Site and DogStudio use captures of their live project websites. The Digital Signature App workflow and Employee Salary Predictor graph are conceptual visuals, not application screenshots. No resume file is included in the provided workspace.

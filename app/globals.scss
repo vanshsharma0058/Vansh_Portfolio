@@ -530,14 +530,6 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
 .hero-center { position: relative; min-height: min(700px, 72vh); display: flex; align-items: flex-end; justify-content: center; }
 .cinematic-hero .hero-art { position: absolute; z-index: 0; left: 50%; top: 31%; width: min(92vw, 1000px); height: min(67vh, 680px); min-height: 0; margin: 0; transform: translate(-50%, -50%); pointer-events: none; }
 .hero-sculpture { position: absolute; inset: 0; display: grid; place-items: center; }
-.hero-sculpture svg { width: 100%; height: 100%; overflow: visible; }
-.sculpture-orbit { stroke: rgba(255,163,104,.22); stroke-width: .8; vector-effect: non-scaling-stroke; }
-.sculpture-orbit-a { transform-origin: 360px 255px; transform: rotate(-18deg); }
-.sculpture-orbit-b { stroke: rgba(255,220,194,.12); stroke-dasharray: 1 5; transform-origin: 360px 255px; transform: rotate(24deg); }
-.sculpture-orbit-c { stroke: rgba(255,122,54,.27); stroke-dasharray: 110 800; stroke-dashoffset: 55; transform-origin: 360px 255px; transform: rotate(-34deg); }
-.sculpture-object { transform-origin: 360px 250px; animation: sculpture-float 8s ease-in-out infinite; }
-.sculpture-orbit-highlight { fill: none; stroke: url(#sculpture-edge); stroke-width: 1.1; opacity: .72; filter: url(#sculpture-highlight); }
-@keyframes sculpture-float { 50% { transform: translateY(-7px) rotate(1.2deg); } }
 .cinematic-hero .hero-art-label, .hero-art-coordinate { position: absolute; color: #a39a8e; font: 8px/1.65 var(--font-mono); letter-spacing: .13em; }
 .hero-art-label-left { top: 48%; left: 2%; text-align: right; transform: translate(-100%,-50%); }
 .hero-art-label-right { top: 38%; right: 2%; transform: translate(100%,-50%); }
@@ -617,7 +609,6 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
   .hero-art-label-left { top: 51%; left: 4%; }
   .hero-art-label-right { top: 30%; right: 4%; }
   .hero-art-coordinate { top: 10%; font-size: 5px; }
-  .sculpture-orbit-c, .sculpture-orbit-b { opacity: .5; }
   .cinematic-hero .hero-bottom { gap: 8px; font-size: 5px; letter-spacing: .05em; }
   .hero-note { display: none; }
   .hero-bottom-status { gap: 5px; }
@@ -632,7 +623,6 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
   .hero-bottom-status { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sculpture-object { animation: none !important; }
   .cinematic-hero .button::before { display: none; }
 }
 
@@ -689,10 +679,6 @@ section[id], article[id] { scroll-margin-top: 108px; }
 .project-kind i { color: var(--accent); font-style: normal; padding-inline: 5px; }
 .project-links { padding-top: 26px; }
 .project-links a { min-height: 36px; }
-.sculpture-shell { transform-box: view-box; }
-.sculpture-core { transform-box: view-box; }
-.sculpture-orbits { transform-box: view-box; transform-origin: 360px 255px; }
-.sculpture-object { animation: none; }
 @media (max-width: 900px) {
   html { scroll-padding-top: 88px; }
   section[id], article[id] { scroll-margin-top: 88px; }
@@ -713,7 +699,6 @@ section[id], article[id] { scroll-margin-top: 108px; }
   .journey-list .experience-body ul { font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sculpture-object { animation: none !important; }
   .project-capture { transition: none; }
 }
 
@@ -723,19 +708,12 @@ section[id], article[id] { scroll-margin-top: 108px; }
 .motion-control:disabled { opacity: .76; cursor: not-allowed; }
 @media (max-width: 900px) { .nav-status { font-size: 7px; letter-spacing: .08em; } }
 .hero-sculpture { overflow: visible; }
-.hero-sculpture svg { display: block; width: 100%; height: 100%; }
-.hero-sculpture::before { content: ""; position: absolute; z-index: 0; left: 50%; top: 75%; width: min(28vw, 330px); height: 42px; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(ellipse, rgba(255,129,58,.34), rgba(172,65,24,.13) 34%, transparent 72%); filter: blur(7px); pointer-events: none; }
-.sphere-fallback, .mechanical-sphere-canvas { position: absolute; inset: 0; transition: opacity .35s ease; }
-.sphere-fallback { display: grid; place-items: center; }
-.sphere-fallback svg { overflow: visible; }
-.fallback-halo { fill: rgba(210,93,42,.06); filter: blur(22px); }
-.sphere-fallback g[clip-path] { stroke: rgba(255,171,117,.35); stroke-width: 1; }
-.fallback-core { opacity: .18; filter: blur(7px); }
-.fallback-orbit { fill: none; stroke: rgba(255,163,104,.23); stroke-width: .8; }
-.fallback-orbit-two { stroke: rgba(255,220,194,.12); stroke-dasharray: 2 8; }
-.mechanical-sphere-canvas { z-index: 1; }
-.mechanical-sphere-canvas canvas { display: block; width: 100%; height: 100%; }
-.hero-sculpture.has-webgl .sphere-fallback { opacity: 0; }
+.particle-portrait { position: absolute; inset: 0; overflow: hidden; }
+.portrait-image-fallback { position: absolute; inset: 0; width: 72%; height: 100%; margin: auto; object-fit: contain; opacity: .2; filter: grayscale(1) brightness(.72); transition: opacity .35s ease; }
+.particle-portrait.is-ready .portrait-image-fallback { opacity: 0; }
+.particle-portrait-canvas, .particle-portrait-canvas canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }
+.portrait-loading { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 44%, rgba(255,122,54,.08), transparent 42%); }
+@media (min-width: 901px) { .particle-portrait.is-ready .portrait-image-fallback { opacity: .12; } }
 
 .project-showcase-layout { display: grid; grid-template-columns: minmax(150px, .24fr) minmax(0, 1fr); align-items: start; gap: clamp(24px, 5vw, 78px); }
 .project-index { position: sticky; top: 120px; display: grid; gap: 5px; width: auto; max-width: none; margin: 0; padding: 14px 0 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
@@ -790,7 +768,6 @@ section[id], article[id] { scroll-margin-top: 108px; }
   .project-story { gap: 18px; }
 }
 @media (max-width: 620px) {
-  .hero-sculpture::before { top: 71%; width: 42vw; height: 28px; }
   .project-story-heading h3 { font-size: clamp(35px, 10vw, 54px); }
   .project-story-heading > p { font-size: 11px; }
   .project-visual, .project:first-child .project-visual { aspect-ratio: 4 / 3; }

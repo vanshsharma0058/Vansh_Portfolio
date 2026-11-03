@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
@@ -13,32 +13,22 @@ gsap.registerPlugin(ScrollTrigger, useGSAP);
 export function EngineeringJourney() {
   const [active, setActive] = useState(0);
   const { enabled, reducedMotion: reduced } = useMotionPreference();
-
-  useEffect(() => {
-    const section = document.querySelector<HTMLElement>(".experience-list");
-    if (!section) return;
-    let frame = 0;
-    const updateProgress = () => {
-      frame = 0;
-      const top = section.getBoundingClientRect().top + window.scrollY;
-      const progress = Math.max(0, Math.min(1, (window.scrollY - top) / Math.max(1, section.offsetHeight)));
-      section.style.setProperty("--experience-progress", String(progress));
-    };
-    const scheduleProgress = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateProgress);
-    };
-    updateProgress();
-    window.addEventListener("scroll", scheduleProgress, { passive: true });
-    window.addEventListener("resize", scheduleProgress, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", scheduleProgress);
-      window.removeEventListener("resize", scheduleProgress);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, []);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
-    const items = gsap.utils.toArray<HTMLElement>(".experience-item");
+    const list = listRef.current;
+    if (!list) return;
+    const items = gsap.utils.toArray<HTMLElement>(".experience-item", list);
+    const updateProgress = (progress: number) => list.style.setProperty("--experience-progress", String(progress));
+    ScrollTrigger.create({
+      trigger: list,
+      start: "top 78%",
+      end: "bottom 78%",
+      scrub: true,
+      invalidateOnRefresh: true,
+      onUpdate: (self) => updateProgress(self.progress),
+      onRefresh: (self) => updateProgress(self.progress),
+    });
     items.forEach((item, index) => ScrollTrigger.create({
       trigger: item,
       start: "top 56%",
@@ -53,9 +43,9 @@ export function EngineeringJourney() {
         scrollTrigger: { trigger: item, start: "top 76%", once: true },
       });
     });
-  }, { dependencies: [enabled, reduced], revertOnUpdate: true });
+  }, { scope: listRef, dependencies: [enabled, reduced], revertOnUpdate: true });
 
-  return <div className="experience-list journey-list">
+  return <div className="experience-list journey-list" ref={listRef}>
     <div className="experience-rail" aria-hidden="true"><span className="experience-progress" />{experience.map((job, index) => <i className={active === index ? "is-active" : ""} key={job.company} />)}</div>
     {experience.map((job, index) => <article className={`experience-item ${active === index ? "is-current" : ""}`} key={job.company}>
       <div className="experience-period"><span>{String(index + 1).padStart(2, "0")}</span><time>{job.period}</time></div>

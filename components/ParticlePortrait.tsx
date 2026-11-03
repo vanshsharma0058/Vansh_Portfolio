@@ -20,16 +20,17 @@ const VERTEX_SHADER = /* glsl */ `
   uniform float uDesktopMode;
   uniform float uPixelRatio;
   varying vec3 vColor;
-  varying float vSeed;
   varying float vOpacity;
   void main() {
-    // Hold the likeness together through the early scroll, then accelerate
-    // breakup so facial detail survives until the middle of the transition.
+    // Hold the likeness through the early stages, then accelerate late so the
+    // cloud opens quickly while the hero content exits on the same timeline.
     float t;
     float p;
     if (uDesktopMode > 0.5) {
-      t = clamp((uProgress - 0.20) / 0.80, 0.0, 1.0);
-      p = t * t * t;
+      t = clamp((uProgress - 0.06) / 0.94, 0.0, 1.0);
+      // Keep the portrait intact early, then open the cloud more decisively
+      // as the hero exits. This still maps to one reversible scroll value.
+      p = smoothstep(0.42, 0.78, t);
     } else {
       float start = 0.14 + aSeed * 0.10;
       t = clamp((uProgress - start) / (1.0 - start), 0.0, 1.0);
@@ -38,22 +39,21 @@ const VERTEX_SHADER = /* glsl */ `
     vec3 pos = mix(position, aTarget, p);
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = clamp(aSize * uPixelRatio * (300.0 / -mv.z), 0.85, 2.25);
+    gl_PointSize = clamp(aSize * uPixelRatio * (300.0 / -mv.z), 0.8, 2.25);
     vColor = aColor;
-    vSeed = aSeed;
-    vOpacity = aOpacity;
+    // Resolve the pinned cloud before the ticker and About section pass behind it.
+    float desktopFade = uDesktopMode > 0.5 ? 1.0 - smoothstep(0.45, 0.68, uProgress) : 1.0;
+    vOpacity = aOpacity * desktopFade;
   }
 `;
 const FRAGMENT_SHADER = /* glsl */ `
   varying vec3 vColor;
-  varying float vSeed;
   varying float vOpacity;
   void main() {
     float radius = length(gl_PointCoord - 0.5);
     float core = 1.0 - smoothstep(0.18, 0.49, radius);
-    float grain = 0.97 + 0.03 * sin(vSeed * 31.0);
     if (core < 0.01) discard;
-    gl_FragColor = vec4(vColor * grain, core * vOpacity * 0.92);
+    gl_FragColor = vec4(vColor, core * vOpacity * 0.92);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -91,24 +91,52 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
   context.drawImage(image, 0, 0, side, side);
   const pixels = context.getImageData(0, 0, side, side).data;
 
-  // Uniform reservoir sampling includes all visible tones; brightness is never
-  // used to decide whether a source pixel becomes a particle.
+  // Weight sampling toward edges and local detail, while retaining baseline
+  // coverage in soft shadows, skin, and clothing. Transparent pixels are
+  // excluded using alpha only; darkness never removes a source pixel.
+  const maxCandidates = Math.ceil(side / 2) ** 2;
+  const candidateIndices = new Uint32Array(maxCandidates);
+  const cumulativeWeights = new Float32Array(maxCandidates);
   const samples: number[] = [];
-  let visited = 0;
+  let candidateCount = 0;
+  let totalWeight = 0;
+  const pixelLuminance = (index: number) =>
+    .2126 * toLinear(pixels[index]) +
+    .7152 * toLinear(pixels[index + 1]) +
+    .0722 * toLinear(pixels[index + 2]);
+
   for (let y = 2; y < side - 2; y += 2) {
     for (let x = 2; x < side - 2; x += 2) {
       const index = (y * side + x) * 4;
-      if (pixels[index + 3] === 0) continue;
-      visited++;
-      if (samples.length < maxPoints) samples.push(index);
-      else {
-        const slot = Math.floor(Math.random() * visited);
-        if (slot < maxPoints) samples[slot] = index;
-      }
+      const alpha = pixels[index + 3] / 255;
+      if (alpha < 0.035) continue;
+      const luminance = pixelLuminance(index);
+      const left = pixelLuminance(index - 8);
+      const right = pixelLuminance(index + 8);
+      const above = pixelLuminance(index - side * 8);
+      const below = pixelLuminance(index + side * 8);
+      const edgeStrength = Math.hypot(right - left, below - above) * .5;
+      const localContrast = Math.abs(luminance - (left + right + above + below) * .25);
+      const weight = Math.min(1.48, .66 + edgeStrength * 1.1 + localContrast * .68 + luminance * .12) * (.3 + alpha * .7);
+      candidateIndices[candidateCount] = index;
+      totalWeight += weight;
+      cumulativeWeights[candidateCount] = totalWeight;
+      candidateCount++;
     }
   }
 
-  const count = samples.length;
+  const count = Math.min(maxPoints, candidateCount);
+  if (count === 0) return null;
+  const sampleInterval = totalWeight / count;
+  let candidateCursor = 0;
+  let nextSample = sampleInterval * .43;
+  for (let point = 0; point < count; point++) {
+    while (candidateCursor < candidateCount - 1 && cumulativeWeights[candidateCursor] < nextSample) {
+      candidateCursor++;
+    }
+    samples.push(candidateIndices[candidateCursor]);
+    nextSample += sampleInterval;
+  }
   const positions = new Float32Array(count * 3);
   const targets = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
@@ -126,50 +154,63 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
     const g = toLinear(pixels[pixel + 1]);
     const b = toLinear(pixels[pixel + 2]);
     const luminance = .2126 * r + .7152 * g + .0722 * b;
-    const sampleLuminance = (index: number) =>
-      .2126 * toLinear(pixels[index]) +
-      .7152 * toLinear(pixels[index + 1]) +
-      .0722 * toLinear(pixels[index + 2]);
     const localMean = (
-      sampleLuminance(pixel - 8) + sampleLuminance(pixel + 8) +
-      sampleLuminance(pixel - side * 8) + sampleLuminance(pixel + side * 8)
+      pixelLuminance(pixel - 8) + pixelLuminance(pixel + 8) +
+      pixelLuminance(pixel - side * 8) + pixelLuminance(pixel + side * 8)
     ) * .25;
     const localContrast = luminance - localMean;
     const key = point + 1;
-    const jitterX = (hash(key * 13.3) - .5) * 1.7;
-    const jitterY = (hash(key * 15.7) - .5) * 1.7;
-    const px = ((x + jitterX) / (side - 1) - .5) * 6.45;
-    const py = (.5 - (y + jitterY) / (side - 1)) * 6.45;
+    const jitterX = (hash(key * 13.3) - .5) * .8;
+    const jitterY = (hash(key * 15.7) - .5) * .8;
+    // Keep the head top near its current position while drawing the shoulders
+    // upward and inward so they sit behind the title, not the supporting copy.
+    const portraitScale = 5.8;
+    const px = ((x + jitterX) / (side - 1) - .5) * portraitScale;
+    const py = (.5 - (y + jitterY) / (side - 1)) * portraitScale + .25;
     const pz = (hash(key * 1.7) - .5) * .12;
 
     // Irregular angular spread and independent horizontal drift avoid mirrored
     // wings while retaining an outward, depth-rich cloud.
     const angle = Math.atan2(py, px) + (hash(key * 2.3) - .5) * 6.0;
-    const radial = 1.15 + hash(key * 3.1) * 3.2;
-    const driftX = (hash(key * 4.7) - .5) * 2.7;
+    const radial = 1.6 + hash(key * 3.1) * 4.2;
+    const driftX = (hash(key * 4.7) - .5) * 3.5;
+    const targetX = px + Math.cos(angle) * radial + driftX;
+    const targetY = py + Math.sin(angle) * radial * .86 - .3 - hash(key * 5.3) * .9;
+    // Softly contain the final cloud within the canvas frustum so particles
+    // don't hit its rectangular clipping edge at maximum dispersion.
     targets.set([
-      px + Math.cos(angle) * radial + driftX,
-      py + Math.sin(angle) * radial * .76 - .25 - hash(key * 5.3) * .8,
-      pz + (hash(key * 6.1) - .38) * 3.4,
+      Math.tanh(targetX / 9) * 7.6,
+      Math.tanh(targetY / 5.2) * 3.1,
+      pz + (hash(key * 6.1) - .38) * 4.4,
     ], point * 3);
     positions.set([px, py, pz], point * 3);
 
-    // Preserve photographic dark-to-light range in linear space. Retain a
-    // small amount of source RGB; warm source pixels in the hair get restrained
-    // orange color instead of a synthetic outline on both sides.
-    const tone = Math.min(.98, Math.max(.006, luminance * 1.65 - .012 + localContrast * 1.55));
+    // The PNG is sRGB. Perceptual luminance avoids crushing the source face
+    // into mid-grey while retaining its dark hair and clothing shadows.
+    const srgbLuminance = .2126 * sourceR + .7152 * (pixels[pixel + 1] / 255) + .0722 * sourceB;
+    const detail = Math.max(0, Math.min(1, (srgbLuminance - .025) / .78 + localContrast * .42));
+    const tone = .008 + Math.pow(detail, .76) * .94;
+    const alpha = pixels[pixel + 3] / 255;
+    const edgeColorTrust = Math.max(0, Math.min(1, (alpha - .58) / .34));
     const sourceWarmth = Math.max(0, sourceR - sourceB * 1.2);
-    const orange = y < side * .42 && sourceWarmth > .16 && hash(key * 7.9) > .62;
-    const warmth = orange ? Math.min(.11, sourceWarmth * .24) : 0;
+    const orange = y < side * .44 && sourceWarmth > .12 && hash(key * 7.9) > .54;
+    const warmth = orange ? Math.min(.14, sourceWarmth * .28) * edgeColorTrust : 0;
+    const sourceColorTrust = edgeColorTrust * .065;
     colors.set([
-      tone * .96 + r * .04 + warmth,
-      tone * .96 + g * .04 - warmth * .38,
-      tone * .96 + b * .04 - warmth * .62,
+      tone * (1 - sourceColorTrust) + r * sourceColorTrust + warmth,
+      tone * (1 - sourceColorTrust) + g * sourceColorTrust - warmth * .38,
+      tone * (1 - sourceColorTrust) + b * sourceColorTrust - warmth * .62,
     ], point * 3);
-    sizes[point] = .035 + tone * .014 + hash(key * 9.1) * .007;
+    sizes[point] = .035 + tone * .016 + hash(key * 9.1) * .006;
     seeds[point] = hash(key * 11.7);
-    // Preserve anti-aliased cutout edges without turning alpha into brightness.
-    opacities[point] = pixels[pixel + 3] / 255;
+    // Add a slight, seed-varied opacity falloff across the photo's cropped
+    // lower edge. This dissolves the shoulder cutoff as individual points.
+    const shoulderEdge = Math.min(1, Math.abs(x / (side - 1) - .5) * 2);
+    const edgeStart = side * (.82 + shoulderEdge * .045 + hash(key * 12.9) * .025);
+    const edgeEnd = side * (.94 + shoulderEdge * .025 + hash(key * 14.1) * .02);
+    const edgeProgress = Math.max(0, Math.min(1, (y - edgeStart) / (edgeEnd - edgeStart)));
+    const edgeFade = 1 - edgeProgress * edgeProgress * (3 - 2 * edgeProgress);
+    opacities[point] = alpha * edgeFade;
   }
 
   return { positions, targets, colors, sizes, seeds, opacities };
@@ -232,7 +273,7 @@ export default function ParticlePortrait() {
     image.onload = () => {
       if (!alive) return;
       const mobile = window.matchMedia("(max-width: 700px)").matches;
-      const field = samplePortrait(image, mobile ? 18000 : 88000);
+      const field = samplePortrait(image, mobile ? 18000 : 110000);
       if (field) setData(field);
     };
     image.src = PORTRAIT;
@@ -248,36 +289,61 @@ export default function ParticlePortrait() {
     media.add("(min-width: 900px)", () => {
       const hero = document.querySelector<HTMLElement>("#home");
       const copy = hero?.querySelector<HTMLElement>(".hero-copy");
-      const sculpture = hero?.querySelector<HTMLElement>(".hero-sculpture");
-      const sourceDetail = hero?.querySelector<HTMLElement>(".portrait-image-fallback");
+      const art = hero?.querySelector<HTMLElement>(".hero-art");
       const annotations = hero?.querySelectorAll<HTMLElement>(".hero-annotation");
+      const artLabels = hero?.querySelectorAll<HTMLElement>(".hero-art-label");
       const bottom = hero?.querySelector<HTMLElement>(".hero-bottom");
       const state = { progress: 0 };
-      const setCopyY = copy ? gsap.quickSetter(copy, "y", "px") : null;
-      const setCopyOpacity = copy ? gsap.quickSetter(copy, "autoAlpha") : null;
-      const setSculptureY = sculpture ? gsap.quickSetter(sculpture, "y", "px") : null;
-      const setSourceOpacity = sourceDetail ? gsap.quickSetter(sourceDetail, "opacity") : null;
-      const setAnnotations = annotations ? gsap.quickSetter(annotations, "autoAlpha") : null;
-      const setBottom = bottom ? gsap.quickSetter(bottom, "autoAlpha") : null;
+      const title = hero?.querySelector<HTMLElement>(".hero-copy h1");
+      const index = hero?.querySelector<HTMLElement>(".hero-index");
+      const intro = hero?.querySelector<HTMLElement>(".hero-intro");
+      const actions = hero?.querySelector<HTMLElement>(".hero-actions");
+      const setTitleY = title ? gsap.quickSetter(title, "y", "px") : null;
+      const setIndexY = index ? gsap.quickSetter(index, "y", "px") : null;
+      const setIntroY = intro ? gsap.quickSetter(intro, "y", "px") : null;
+      const setActionsY = actions ? gsap.quickSetter(actions, "y", "px") : null;
+      const fade = (value: number, start: number, end: number) => {
+        const t = Math.max(0, Math.min(1, (value - start) / (end - start)));
+        return 1 - t * t * (3 - 2 * t);
+      };
       const timeline = gsap.timeline({
         defaults: { ease: "none" },
         onUpdate: () => {
           const progress = state.progress;
           scrollApi.current?.setProgress(progress);
-          setCopyY?.(progress * window.innerHeight * .55);
-          setCopyOpacity?.(1 - Math.max(0, (progress - .84) / .16));
-          // Let the page continue naturally while the portrait recedes more
-          // slowly than the copy, keeping the likeness in view through mid-scroll.
-          setSculptureY?.(progress * window.innerHeight * .62);
-          setSourceOpacity?.(.12 * (1 - Math.max(0, (progress - .62) / .38)));
-          setAnnotations?.(1 - progress * .35);
-          setBottom?.(1 - Math.max(0, (progress - .78) / .22) * .45);
+          // Counter the document's natural scroll while the hero stage is
+          // pinned, then give each text layer its own restrained exit drift.
+          const stageTravel = progress * (hero?.offsetHeight ?? window.innerHeight);
+          setIndexY?.(stageTravel - progress * window.innerHeight * .015);
+          setTitleY?.(stageTravel - progress * window.innerHeight * .22);
+          setIntroY?.(stageTravel - progress * window.innerHeight * .12);
+          setActionsY?.(stageTravel - progress * window.innerHeight * .135);
+          const copyOpacity = fade(progress, .68, .96);
+          if (copy) {
+            copy.style.opacity = String(copyOpacity);
+            copy.style.visibility = copyOpacity <= .001 ? "hidden" : "visible";
+            copy.inert = copyOpacity <= .001;
+          }
+          if (index) index.style.opacity = String(fade(progress, .2, .52));
+          if (title) title.style.opacity = String(fade(progress, .46, .62));
+          if (intro) intro.style.opacity = String(fade(progress, .32, .54));
+          if (actions) actions.style.opacity = String(fade(progress, .22, .5));
+          annotations?.forEach((annotation) => { annotation.style.opacity = String(fade(progress, .12, .54)); });
+          artLabels?.forEach((label) => { label.style.opacity = String(fade(progress, .24, .62)); });
+          const bottomOpacity = fade(progress, .08, .38);
+          if (bottom) {
+            bottom.style.opacity = String(bottomOpacity);
+            bottom.style.visibility = bottomOpacity <= .001 ? "hidden" : "visible";
+          }
         },
         scrollTrigger: {
           trigger: hero,
+          pin: art,
+          pinSpacing: false,
           start: "top top",
-          end: () => `+=${Math.round(window.innerHeight * .72)}`,
+          end: "bottom top",
           scrub: true,
+          anticipatePin: 1,
           invalidateOnRefresh: true,
         },
       });

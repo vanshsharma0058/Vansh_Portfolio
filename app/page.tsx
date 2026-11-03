@@ -36,7 +36,9 @@ export default function Home() {
         <div className="hero-layout">
           <aside className="hero-annotation hero-annotation-left"><span className="annotation-index">01</span><span>ENGINEERING<br />CREATIVITY<br />PROBLEM SOLVING<br />REAL IMPACT</span></aside>
           <div className="hero-center">
-            <div className="hero-art"><HeroSculpture /><span className="hero-art-label hero-art-label-left">CODE<br />DESIGN<br />DEPLOY<br />IMPROVE</span><span className="hero-art-label hero-art-label-right">IDEAS<br />INTO<br />PRODUCTS</span></div>
+            <div className="hero-art"><HeroSculpture />
+            {/* <span className="hero-art-label hero-art-label-left">CODE<br />DESIGN<br />DEPLOY<br />IMPROVE</span><span className="hero-art-label hero-art-label-right">IDEAS<br />INTO<br />PRODUCTS</span> */}
+            </div>
             <div className="hero-copy">
               <p className="hero-index">INDEPENDENT THINKING. CONNECTED SYSTEMS.</p>
               <h1 id="hero-title"><span className="hero-title-line"><span>Vansh <em>Sharma</em></span></span></h1>
@@ -46,7 +48,7 @@ export default function Home() {
           </div>
           <aside className="hero-annotation hero-annotation-right"><span className="hero-side-label">FROM SIGNAL<br />TO SYSTEM</span><span className="hero-scroll-cue">SCROLL<br />TO EXPLORE <ArrowDown size={15} /></span></aside>
         </div>
-        <div className="hero-bottom"><span>TURNING IDEAS INTO MEANINGFUL SOFTWARE</span><span className="hero-note">VANSH SHARMA / 2026</span><span className="hero-bottom-status"><i /> AVAILABLE FOR OPPORTUNITIES</span></div>
+        <div className="hero-bottom"><span className="hero-bottom-scroll hero-scroll-cue">SCROLL<br />TO EXPLORE <ArrowDown size={15} /></span><span>TURNING IDEAS INTO MEANINGFUL SOFTWARE</span><span className="hero-note">VANSH SHARMA / 2026</span><span className="hero-bottom-status"><i /> AVAILABLE FOR OPPORTUNITIES</span></div>
       </section>
 
       <div className="signal-band" aria-label="From signal to system: ideas in motion">

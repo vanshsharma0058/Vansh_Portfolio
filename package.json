@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@emailjs/nodejs": "^5.0.2",
     "@gsap/react": "^2.1.2",
     "@react-three/fiber": "^9.8.2",
     "gsap": "^3.15.0",

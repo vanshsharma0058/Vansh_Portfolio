@@ -52,10 +52,12 @@ export function ScrollReveals() {
       const titleLines = page.querySelectorAll(".hero-title-line");
       const heroCopy = page.querySelectorAll(".hero-intro, .hero-actions");
       const system = page.querySelector(".hero-sculpture");
-      if (heroIndex) intro.fromTo(heroIndex, { y: 12, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.55 }, 0);
-      if (titleLines.length) intro.fromTo(titleLines, { y: 8, autoAlpha: .72 }, { y: 0, autoAlpha: 1, duration: 0.72, stagger: 0.1 }, 0.06);
-      if (heroCopy.length) intro.fromTo(heroCopy, { y: 16, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.55, stagger: 0.1 }, 0.34);
-      if (system) intro.fromTo(system, { scale: .96, autoAlpha: .65 }, { scale: 1, autoAlpha: 1, duration: .9, ease: "power2.out" }, .1);
+      // Keep the one-time entrance restrained and on separate transform
+      // channels; ParticlePortrait owns scroll-linked y and opacity afterward.
+      if (heroIndex) intro.fromTo(heroIndex, { scale: .97 }, { scale: 1, duration: 0.55, clearProps: "transform" }, 0);
+      if (titleLines.length) intro.fromTo(titleLines, { y: 8 }, { y: 0, duration: 0.72, stagger: 0.1, clearProps: "transform" }, 0.06);
+      if (heroCopy.length) intro.fromTo(heroCopy, { scale: .985 }, { scale: 1, duration: 0.55, stagger: 0.1, clearProps: "transform" }, 0.34);
+      if (system) intro.fromTo(system, { scale: .96, autoAlpha: .65 }, { scale: 1, autoAlpha: 1, duration: .9, ease: "power2.out", clearProps: "transform,opacity,visibility" }, .1);
       gsap.utils.toArray<HTMLElement>("[data-reveal]", page).forEach((element) => {
         gsap.fromTo(
           element,

@@ -27,10 +27,12 @@ const VERTEX_SHADER = /* glsl */ `
     float t;
     float p;
     if (uDesktopMode > 0.5) {
-      t = clamp((uProgress - 0.06) / 0.94, 0.0, 1.0);
-      // Keep the portrait intact early, then open the cloud more decisively
-      // as the hero exits. This still maps to one reversible scroll value.
-      p = smoothstep(0.42, 0.78, t);
+      t = clamp((uProgress - 0.04) / 0.96, 0.0, 1.0);
+      // Keep the likeness concentrated at the opening, then reach a full,
+      // visible cloud well before the end-of-hero fade begins.
+      // Let the portrait begin rebuilding before the returning title reaches
+      // the viewport, avoiding a text-only re-entry over an empty field.
+      p = smoothstep(0.08, 0.70, t);
     } else {
       float start = 0.14 + aSeed * 0.10;
       t = clamp((uProgress - start) / (1.0 - start), 0.0, 1.0);
@@ -39,10 +41,16 @@ const VERTEX_SHADER = /* glsl */ `
     vec3 pos = mix(position, aTarget, p);
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = clamp(aSize * uPixelRatio * (300.0 / -mv.z), 0.8, 2.25);
+    gl_PointSize = clamp(aSize * uPixelRatio * (300.0 / -mv.z), 0.8, 1.8);
     vColor = aColor;
-    // Resolve the pinned cloud before the ticker and About section pass behind it.
-    float desktopFade = uDesktopMode > 0.5 ? 1.0 - smoothstep(0.45, 0.68, uProgress) : 1.0;
+    // Let particles resolve at slightly different points so the cloud thins
+    // organically instead of disappearing as one uniform opacity curtain.
+    float desktopFade = 1.0;
+    if (uDesktopMode > 0.5) {
+      float fadeStart = 0.82 + aSeed * 0.08;
+      float fadeEnd = 0.95 + aSeed * 0.04;
+      desktopFade = 1.0 - smoothstep(fadeStart, fadeEnd, uProgress);
+    }
     vOpacity = aOpacity * desktopFade;
   }
 `;
@@ -91,9 +99,44 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
   context.drawImage(image, 0, 0, side, side);
   const pixels = context.getImageData(0, 0, side, side).data;
 
+  // The current source is an opaque RGB image on black. Alpha therefore does
+  // not identify its backdrop. Mark only near-black pixels connected to the
+  // canvas edge; dark pixels enclosed by the portrait (hair, eyes, shirt and
+  // blazer) remain valid source detail.
+  const background = new Uint8Array(side * side);
+  const queue = new Uint32Array(side * side);
+  let queueStart = 0;
+  let queueEnd = 0;
+  const isNearBlack = (pixel: number) =>
+    Math.max(pixels[pixel], pixels[pixel + 1], pixels[pixel + 2]) <= 6;
+  const enqueue = (x: number, y: number) => {
+    const index = y * side + x;
+    if (background[index]) return;
+    if (!isNearBlack(index * 4)) return;
+    background[index] = 1;
+    queue[queueEnd++] = index;
+  };
+  for (let x = 0; x < side; x++) {
+    enqueue(x, 0);
+    enqueue(x, side - 1);
+  }
+  for (let y = 1; y < side - 1; y++) {
+    enqueue(0, y);
+    enqueue(side - 1, y);
+  }
+  while (queueStart < queueEnd) {
+    const index = queue[queueStart++];
+    const x = index % side;
+    const y = Math.floor(index / side);
+    if (x > 0) enqueue(x - 1, y);
+    if (x < side - 1) enqueue(x + 1, y);
+    if (y > 0) enqueue(x, y - 1);
+    if (y < side - 1) enqueue(x, y + 1);
+  }
+
   // Weight sampling toward edges and local detail, while retaining baseline
-  // coverage in soft shadows, skin, and clothing. Transparent pixels are
-  // excluded using alpha only; darkness never removes a source pixel.
+  // coverage in soft shadows, skin, and clothing. The inferred backdrop mask
+  // removes only the edge-connected black field; source alpha remains intact.
   const maxCandidates = Math.ceil(side / 2) ** 2;
   const candidateIndices = new Uint32Array(maxCandidates);
   const cumulativeWeights = new Float32Array(maxCandidates);
@@ -109,7 +152,7 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
     for (let x = 2; x < side - 2; x += 2) {
       const index = (y * side + x) * 4;
       const alpha = pixels[index + 3] / 255;
-      if (alpha < 0.035) continue;
+      if (alpha < 0.035 || background[index / 4]) continue;
       const luminance = pixelLuminance(index);
       const left = pixelLuminance(index - 8);
       const right = pixelLuminance(index + 8);
@@ -117,7 +160,9 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
       const below = pixelLuminance(index + side * 8);
       const edgeStrength = Math.hypot(right - left, below - above) * .5;
       const localContrast = Math.abs(luminance - (left + right + above + below) * .25);
-      const weight = Math.min(1.48, .66 + edgeStrength * 1.1 + localContrast * .68 + luminance * .12) * (.3 + alpha * .7);
+      // Keep broad photographic coverage dominant. Edge and contrast weights
+      // help facial features without concentrating samples on skin texture.
+      const weight = Math.min(1.36, .78 + edgeStrength * .72 + localContrast * .34 + luminance * .1) * (.3 + alpha * .7);
       candidateIndices[candidateCount] = index;
       totalWeight += weight;
       cumulativeWeights[candidateCount] = totalWeight;
@@ -160,8 +205,10 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
     ) * .25;
     const localContrast = luminance - localMean;
     const key = point + 1;
-    const jitterX = (hash(key * 13.3) - .5) * .8;
-    const jitterY = (hash(key * 15.7) - .5) * .8;
+    // Break the 2px sampling lattice while staying within roughly one source
+    // pixel so the photographic contours remain stable.
+    const jitterX = (hash(key * 13.3) - .5) * 1.8;
+    const jitterY = (hash(key * 15.7) - .5) * 1.8;
     // Keep the head top near its current position while drawing the shoulders
     // upward and inward so they sit behind the title, not the supporting copy.
     const portraitScale = 5.8;
@@ -187,21 +234,39 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
 
     // The PNG is sRGB. Perceptual luminance avoids crushing the source face
     // into mid-grey while retaining its dark hair and clothing shadows.
-    const srgbLuminance = .2126 * sourceR + .7152 * (pixels[pixel + 1] / 255) + .0722 * sourceB;
-    const detail = Math.max(0, Math.min(1, (srgbLuminance - .025) / .78 + localContrast * .42));
-    const tone = .008 + Math.pow(detail, .76) * .94;
+    const detail = Math.max(0, Math.min(1, (luminance - .006) / .78 + localContrast * .34));
+    // Shape luminance gently in linear space: preserve deep source shadows,
+    // define midtone facial features, and avoid clipping bright skin highlights.
+    const tone = .002 + Math.min(.98, Math.pow(detail, .9) * .98);
     const alpha = pixels[pixel + 3] / 255;
-    const edgeColorTrust = Math.max(0, Math.min(1, (alpha - .58) / .34));
-    const sourceWarmth = Math.max(0, sourceR - sourceB * 1.2);
-    const orange = y < side * .44 && sourceWarmth > .12 && hash(key * 7.9) > .54;
-    const warmth = orange ? Math.min(.14, sourceWarmth * .28) * edgeColorTrust : 0;
-    const sourceColorTrust = edgeColorTrust * .065;
+    const nearBackground = (x0: number, y0: number) => background[y0 * side + x0] === 1;
+    // Feather just the silhouette edge by a pixel or two to avoid a cutout
+    // fringe while leaving interior dark features crisp.
+    let silhouetteFade = 1;
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        if (nearBackground(x + ox, y + oy)) silhouetteFade = Math.min(silhouetteFade, .68);
+      }
+    }
+    if (silhouetteFade === 1) {
+      for (let oy = -2; oy <= 2; oy += 2) {
+        for (let ox = -2; ox <= 2; ox += 2) {
+          if (nearBackground(x + ox, y + oy)) silhouetteFade = Math.min(silhouetteFade, .86);
+        }
+      }
+    }
+    const sourceWarmth = Math.max(0, sourceR - sourceB * 1.15);
+    const orange = y < side * .48 && sourceWarmth > .11 && hash(key * 7.9) > .62;
+    const warmth = orange ? Math.min(.11, sourceWarmth * .24) : 0;
+    const sourceColorTrust = .26;
     colors.set([
       tone * (1 - sourceColorTrust) + r * sourceColorTrust + warmth,
-      tone * (1 - sourceColorTrust) + g * sourceColorTrust - warmth * .38,
-      tone * (1 - sourceColorTrust) + b * sourceColorTrust - warmth * .62,
+      tone * (1 - sourceColorTrust) + g * sourceColorTrust - warmth * .28,
+      tone * (1 - sourceColorTrust) + b * sourceColorTrust - warmth * .48,
     ], point * 3);
-    sizes[point] = .035 + tone * .016 + hash(key * 9.1) * .006;
+    // Keep the stipple finer than the reference image's facial features so
+    // neighbouring samples do not merge into a noisy, flat patch.
+    sizes[point] = .021 + Math.pow(detail, .72) * .012 + hash(key * 9.1) * .002;
     seeds[point] = hash(key * 11.7);
     // Add a slight, seed-varied opacity falloff across the photo's cropped
     // lower edge. This dissolves the shoulder cutoff as individual points.
@@ -210,7 +275,7 @@ function samplePortrait(image: HTMLImageElement, maxPoints: number): ParticleDat
     const edgeEnd = side * (.94 + shoulderEdge * .025 + hash(key * 14.1) * .02);
     const edgeProgress = Math.max(0, Math.min(1, (y - edgeStart) / (edgeEnd - edgeStart)));
     const edgeFade = 1 - edgeProgress * edgeProgress * (3 - 2 * edgeProgress);
-    opacities[point] = alpha * edgeFade;
+    opacities[point] = alpha * silhouetteFade * edgeFade;
   }
 
   return { positions, targets, colors, sizes, seeds, opacities };
@@ -273,7 +338,7 @@ export default function ParticlePortrait() {
     image.onload = () => {
       if (!alive) return;
       const mobile = window.matchMedia("(max-width: 700px)").matches;
-      const field = samplePortrait(image, mobile ? 18000 : 110000);
+      const field = samplePortrait(image, mobile ? 18000 : 132000);
       if (field) setData(field);
     };
     image.src = PORTRAIT;
@@ -289,7 +354,7 @@ export default function ParticlePortrait() {
     media.add("(min-width: 900px)", () => {
       const hero = document.querySelector<HTMLElement>("#home");
       const copy = hero?.querySelector<HTMLElement>(".hero-copy");
-      const art = hero?.querySelector<HTMLElement>(".hero-art");
+      const top = hero?.querySelector<HTMLElement>(".hero-top");
       const annotations = hero?.querySelectorAll<HTMLElement>(".hero-annotation");
       const artLabels = hero?.querySelectorAll<HTMLElement>(".hero-art-label");
       const bottom = hero?.querySelector<HTMLElement>(".hero-bottom");
@@ -298,10 +363,6 @@ export default function ParticlePortrait() {
       const index = hero?.querySelector<HTMLElement>(".hero-index");
       const intro = hero?.querySelector<HTMLElement>(".hero-intro");
       const actions = hero?.querySelector<HTMLElement>(".hero-actions");
-      const setTitleY = title ? gsap.quickSetter(title, "y", "px") : null;
-      const setIndexY = index ? gsap.quickSetter(index, "y", "px") : null;
-      const setIntroY = intro ? gsap.quickSetter(intro, "y", "px") : null;
-      const setActionsY = actions ? gsap.quickSetter(actions, "y", "px") : null;
       const fade = (value: number, start: number, end: number) => {
         const t = Math.max(0, Math.min(1, (value - start) / (end - start)));
         return 1 - t * t * (3 - 2 * t);
@@ -311,26 +372,39 @@ export default function ParticlePortrait() {
         onUpdate: () => {
           const progress = state.progress;
           scrollApi.current?.setProgress(progress);
-          // Counter the document's natural scroll while the hero stage is
-          // pinned, then give each text layer its own restrained exit drift.
-          const stageTravel = progress * (hero?.offsetHeight ?? window.innerHeight);
-          setIndexY?.(stageTravel - progress * window.innerHeight * .015);
-          setTitleY?.(stageTravel - progress * window.innerHeight * .22);
-          setIntroY?.(stageTravel - progress * window.innerHeight * .12);
-          setActionsY?.(stageTravel - progress * window.innerHeight * .135);
-          const copyOpacity = fade(progress, .68, .96);
-          if (copy) {
-            copy.style.opacity = String(copyOpacity);
-            copy.style.visibility = copyOpacity <= .001 ? "hidden" : "visible";
-            copy.inert = copyOpacity <= .001;
+          // Let normal document flow move the complete hero together. The
+          // scrubbed progress controls the portrait and its staged exit only.
+          if (progress <= 0.0001) {
+            [index, title, intro, actions, top, bottom].forEach((element) => {
+              if (element) element.style.opacity = "";
+            });
+            annotations?.forEach((element) => { element.style.opacity = ""; });
+            artLabels?.forEach((element) => { element.style.opacity = ""; });
+            if (copy) {
+              copy.style.opacity = "";
+              copy.style.visibility = "";
+              copy.inert = false;
+            }
+            if (bottom) bottom.style.visibility = "";
+            return;
           }
-          if (index) index.style.opacity = String(fade(progress, .2, .52));
-          if (title) title.style.opacity = String(fade(progress, .46, .62));
-          if (intro) intro.style.opacity = String(fade(progress, .32, .54));
-          if (actions) actions.style.opacity = String(fade(progress, .22, .5));
-          annotations?.forEach((annotation) => { annotation.style.opacity = String(fade(progress, .12, .54)); });
-          artLabels?.forEach((label) => { label.style.opacity = String(fade(progress, .24, .62)); });
-          const bottomOpacity = fade(progress, .08, .38);
+          if (copy) {
+            // Child elements own their individual fades; avoid multiplying
+            // them by a second opacity on their parent.
+            const exited = progress >= .999;
+            copy.style.visibility = exited ? "hidden" : "visible";
+            copy.inert = exited;
+          }
+          if (index) index.style.opacity = String(fade(progress, .16, .38));
+          // The title leaves as it reaches the top edge and returns only as
+          // the portrait begins rebuilding on reverse scroll.
+          if (title) title.style.opacity = String(fade(progress, .56, .72));
+          if (intro) intro.style.opacity = String(fade(progress, .38, .62));
+          if (actions) actions.style.opacity = String(fade(progress, .42, .66));
+          if (top) top.style.opacity = String(fade(progress, .2, .4));
+          annotations?.forEach((annotation) => { annotation.style.opacity = String(fade(progress, .16, .4)); });
+          artLabels?.forEach((label) => { label.style.opacity = String(fade(progress, .22, .44)); });
+          const bottomOpacity = fade(progress, .22, .46);
           if (bottom) {
             bottom.style.opacity = String(bottomOpacity);
             bottom.style.visibility = bottomOpacity <= .001 ? "hidden" : "visible";
@@ -338,17 +412,37 @@ export default function ParticlePortrait() {
         },
         scrollTrigger: {
           trigger: hero,
-          pin: art,
-          pinSpacing: false,
+          // Keep the hero and following sections in normal document flow.
+          // Progress follows the hero's natural viewport exit, so the next
+          // section cannot slide beneath a pinned portrait stage.
           start: "top top",
           end: "bottom top",
           scrub: true,
-          anticipatePin: 1,
           invalidateOnRefresh: true,
         },
       });
       timeline.to(state, { progress: 1, duration: 1 }, 0);
-      return () => timeline.kill();
+      return () => {
+        timeline.kill();
+        // ScrollTrigger may be rebuilt after a breakpoint or motion preference
+        // change. Restore direct style writes as well as GSAP transforms so the
+        // hero cannot reopen half faded or retain a stale offset.
+        [title, index, intro, actions].forEach((element) => {
+          if (element) element.style.opacity = "";
+        });
+        annotations?.forEach((element) => { element.style.opacity = ""; });
+        artLabels?.forEach((element) => { element.style.opacity = ""; });
+        if (top) top.style.opacity = "";
+        if (copy) {
+          copy.style.opacity = "";
+          copy.style.visibility = "";
+          copy.inert = false;
+        }
+        if (bottom) {
+          bottom.style.opacity = "";
+          bottom.style.visibility = "";
+        }
+      };
     });
     ScrollTrigger.refresh();
     return () => media.revert();

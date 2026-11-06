@@ -8,6 +8,7 @@ import { TechnicalCapabilities } from "@/components/TechnicalCapabilities";
 import { profile, skillGroups } from "@/data/portfolio";
 import { ProjectShowcase } from "@/components/ProjectShowcase";
 import { EngineeringJourney } from "@/components/EngineeringJourney";
+import { ContactForm } from "@/components/ContactForm";
 
 const personSchema = {
   "@context": "https://schema.org",
@@ -103,9 +104,21 @@ export default function Home() {
       </section>
 
       <section className="contact section-shell" id="contact" aria-labelledby="contact-title">
-        <div className="contact-visual" aria-hidden="true"><div className="contact-rings"><i /><i /><i /><i /></div><span>OPEN<br />CHANNEL</span></div>
-        <div className="contact-copy" data-reveal><span className="section-kicker"><span>08</span><span>THE NEXT CHAPTER</span></span><h2 id="contact-title">Let&apos;s build<br />something <em>useful.</em></h2><p>I&apos;m open to early-career software engineering roles, collaborations, and conversations about thoughtful technology.</p><a className="button button-primary contact-button" href={`mailto:${profile.email}`}>Start a conversation <ArrowUpRight size={16} /></a></div>
-        <div className="contact-links"><a href={`mailto:${profile.email}`}><span><Mail size={16} /> EMAIL</span><strong>{profile.email}</strong><ArrowUpRight size={16} /></a><a href={profile.linkedin} target="_blank" rel="noreferrer"><span><Linkedin size={16} /> LINKEDIN</span><strong>Connect professionally</strong><ArrowUpRight size={16} /></a><a href={profile.github} target="_blank" rel="noreferrer"><span><Github size={16} /> GITHUB</span><strong>Explore my repositories</strong><ArrowUpRight size={16} /></a></div>
+        <div className="contact-layout">
+          <div className="contact-copy" data-reveal>
+            <span className="section-kicker"><span>08</span><span>THE NEXT CHAPTER</span></span>
+            <h2 id="contact-title">Let&apos;s build<br />something <em>useful.</em></h2>
+            <p>I&apos;m open to early-career software engineering roles, collaborations, and conversations about thoughtful technology.</p>
+            <div className="contact-availability"><i /> <span>OPEN TO OPPORTUNITIES</span></div>
+            <a className="contact-form-link" href="#contact-form">Start a conversation <ArrowUpRight size={15} /></a>
+            <div className="contact-links">
+              <a href={`mailto:${profile.email}`}><span><Mail size={15} /> EMAIL</span><strong>{profile.email}</strong><ArrowUpRight size={15} /></a>
+              <a href={profile.linkedin} target="_blank" rel="noreferrer"><span><Linkedin size={15} /> LINKEDIN</span><strong>Connect professionally</strong><ArrowUpRight size={15} /></a>
+              <a href={profile.github} target="_blank" rel="noreferrer"><span><Github size={15} /> GITHUB</span><strong>Explore my repositories</strong><ArrowUpRight size={15} /></a>
+            </div>
+          </div>
+          <ContactForm />
+        </div>
       </section>
     </main>
     <footer className="site-footer"><span>Vansh Sharma <i>·</i> Software Engineer</span><a href="#home">BACK TO TOP <ArrowUpRight size={13} /></a><span>IDEAS IN MOTION / 2026</span></footer>

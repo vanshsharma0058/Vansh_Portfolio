@@ -32,8 +32,7 @@ export function SiteHeader() {
       <a className="skip-link" href="#main">Skip to content</a>
       <nav className="nav-wrap" aria-label="Main navigation">
         <a className={`nav-status ${activeSection === "home" ? "is-active" : ""}`} href="#home" aria-label="Home" aria-current={activeSection === "home" ? "location" : undefined}>
-          
-          <span className="status-dot" aria-hidden="true" /><span>OPEN TO OPPORTUNITIES</span>
+          <span className="status-dot" aria-hidden="true" /><span className="nav-status-desktop">OPEN TO OPPORTUNITIES</span><span className="mobile-nav-brand">Vansh Sharma</span>
         </a>
         <div className="desktop-nav">
           {links.map(([label, href]) => <a className={activeSection === href.slice(1) ? "is-active" : ""} key={href} href={href} aria-current={activeSection === href.slice(1) ? "location" : undefined}>{label}</a>)}

@@ -69,7 +69,7 @@ debug.log
 .env.test.local
 .env.production.local
 # Ignore image files
-*.png
+
 *.jpg
 *.jpeg
 *.webp
